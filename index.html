@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pianoGoose · 键盘学钢琴</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 顶栏 -->
+    <header id="topbar">
+      <div class="brand">🎹 <span>pianoGoose</span><small>键盘学钢琴</small></div>
+
+      <nav class="tabs">
+        <button id="tab-free" class="tab">自由演奏</button>
+        <button id="tab-song" class="tab">弹奏曲目</button>
+        <button id="tab-theory" class="tab">乐理练习</button>
+      </nav>
+
+      <div class="topsettings">
+        <div class="oct">
+          <button id="octDown" title="降八度 (Z)">▼</button>
+          <span id="octLabel">C4 起</span>
+          <button id="octUp" title="升八度 (X)">▲</button>
+        </div>
+        <label class="set">音量
+          <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+        </label>
+        <label class="set">主题
+          <select id="themeSel">
+            <option value="midnight">午夜</option>
+            <option value="ocean">青碧</option>
+            <option value="sunset">暮色</option>
+            <option value="light">日光</option>
+          </select>
+        </label>
+        <span id="midiStatus" class="midi">MIDI: 检测中…</span>
+      </div>
+    </header>
+
+    <div id="body">
+      <!-- 左侧面板 -->
+      <aside id="panel">
+        <!-- 自由演奏 -->
+        <section id="panel-free" class="panel-sec">
+          <h3>自由演奏</h3>
+          <p class="hint">直接用键盘弹奏，屏幕会显示音名与唱名。<br/>
+            白键在 <kbd>A</kbd> 到 <kbd>'</kbd> 一排，黑键在 <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> 上方一排。<br/>
+            <kbd>Z</kbd>/<kbd>X</kbd> 上下移八度。</p>
+        </section>
+
+        <!-- 曲目 -->
+        <section id="panel-song" class="panel-sec hidden">
+          <h3>曲目</h3>
+          <div id="songList" class="song-list"></div>
+
+          <details id="importer">
+            <summary>＋ 用简谱添加自己的歌</summary>
+            <div class="imp-body">
+              <input id="jpName" type="text" placeholder="曲名" />
+              <textarea id="jpText" rows="4" placeholder="粘贴简谱，如：&#10;1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 -"></textarea>
+              <div class="imp-row">
+                <label>调(1=) <select id="jpKey"></select></label>
+                <label>速度 <input id="jpBpm" type="number" value="90" min="30" max="240" /></label>
+              </div>
+              <div class="imp-help">
+                1-7=do~si · 0休止 · <b>'</b>高八度 <b>,</b>低八度 · <b>#/b</b>升降 · <b>.</b>附点 · <b>/</b>八分 · <b>-</b>延一拍
+              </div>
+              <div class="imp-btns">
+                <button id="jpLoad" class="go">载入试弹</button>
+                <button id="jpSave" class="t-btn">保存到曲库</button>
+              </div>
+              <div id="jpErr" class="imp-err"></div>
+            </div>
+          </details>
+        </section>
+
+        <!-- 乐理 -->
+        <section id="panel-theory" class="panel-sec hidden">
+          <h3>乐理练习</h3>
+          <div class="th-block">
+            <label>根音 <select id="thRoot"></select></label>
+          </div>
+          <div class="th-block">
+            <div class="th-row">
+              <label>音阶 <select id="thScale"></select></label>
+              <label>手 <select id="thHand"><option value="R">右手</option><option value="L">左手</option></select></label>
+            </div>
+            <button id="thScaleGo" class="go">练音阶</button>
+          </div>
+          <div class="th-block">
+            <label>和弦 <select id="thChord"></select></label>
+            <button id="thChordGo" class="go">练和弦</button>
+          </div>
+          <div class="th-block">
+            <label>进行 <select id="thProg"></select></label>
+            <button id="thProgGo" class="go">练进行</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- 主舞台 -->
+      <main id="stage">
+        <!-- HUD -->
+        <div id="hud">
+          <div class="hud-item"><label>连击</label><b id="combo">0</b></div>
+          <div class="hud-item"><label>得分</label><b id="score">0</b></div>
+          <div class="hud-item"><label>准确</label><b id="accuracy">100%</b></div>
+          <div class="now" id="nowPlaying">选一首曲子开始</div>
+        </div>
+
+        <div class="progress"><div id="progressBar"></div></div>
+
+        <!-- 瀑布 + 判定弹字 -->
+        <div id="fallzone">
+          <canvas id="waterfall"></canvas>
+          <div id="judgeLayer"></div>
+          <!-- 自由演奏读出 -->
+          <div id="freeReadout">
+            <div class="big" id="freeNote">—</div>
+            <div class="sub"><span id="freeSol">—</span> · 键 <span id="freeKey">—</span></div>
+          </div>
+        </div>
+
+        <!-- 钢琴 -->
+        <div id="piano"></div>
+
+        <!-- 走带控制 -->
+        <div id="transport">
+          <button id="btnListen" class="t-btn">🔊 试听</button>
+          <button id="btnPlay" class="t-btn primary">▶ 开始</button>
+          <button id="btnRestart" class="t-btn">↻ 重来</button>
+          <div class="t-opts">
+            <label>速度
+              <select id="speed">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.25">1.25×</option>
+              </select>
+            </label>
+            <label class="chk"><input id="waitToggle" type="checkbox" checked /> 等待模式</label>
+            <label>标注
+              <select id="labelMode">
+                <option value="both" selected>键+音名</option>
+                <option value="note">音名</option>
+                <option value="solfege">唱名</option>
+                <option value="staff">五线谱</option>
+                <option value="key">仅按键</option>
+              </select>
+            </label>
+            <label class="chk"><input id="fingerToggle" type="checkbox" checked /> 指法</label>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 键位图例 -->
+    <footer id="legendbar">
+      <span class="legend-title">键位映射</span>
+      <div id="legend"></div>
+    </footer>
+  </div>
+
+  <!-- 结算面板 -->
+  <div id="results" class="hidden">
+    <div class="results-card">
+      <div id="stars" class="stars">☆☆☆</div>
+      <div class="res-row"><span>准确率</span><b id="resAcc">0%</b></div>
+      <div class="res-row"><span>得分</span><b id="resScore">0</b></div>
+      <div class="res-detail" id="resDetail"></div>
+      <div class="res-btns">
+        <button id="btnRetry" class="t-btn primary">再来一次</button>
+        <button id="btnClose" class="t-btn">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/core.js"></script>
+  <script src="js/jianpu.js"></script>
+  <script src="js/keymap.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/theory.js"></script>
+  <script src="js/songs.js"></script>
+  <script src="js/piano.js"></script>
+  <script src="js/waterfall.js"></script>
+  <script src="js/midi.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
